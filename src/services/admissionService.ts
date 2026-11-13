@@ -1,11 +1,14 @@
 import { signOut } from 'firebase/auth';
 import {
   collection,
+  collectionGroup,
   doc,
   getDoc,
   getDocs,
   serverTimestamp,
   setDoc,
+  type QueryDocumentSnapshot,
+  type DocumentData,
 } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import type {
@@ -102,79 +105,61 @@ function extractSectionsFromArray(rawSections: unknown): string[] {
   return Array.from(new Set(results));
 }
 
-export async function fetchActiveCoachingCatalog(): Promise<{
-  setup: CoachingSetup | null;
-  classes: CoachingClass[];
-}> {
-  const setupPath = 'coaching_setup';
-  let setupDocs;
-  try {
-    setupDocs = await getDocs(collection(db, setupPath));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, setupPath);
+function parseClassName(data: Record<string, unknown>): string {
+  const candidates = [
+    data.name,
+    data.className,
+    data.class_name,
+    data.title,
+    data.label,
+    data.standard,
+    data.batchName,
+    data.courseName,
+    data.class,
+  ];
+  for (const val of candidates) {
+    if (typeof val === 'string' && val.trim()) {
+      return val.trim();
+    }
   }
+  return '';
+}
 
-  if (setupDocs.empty) {
-    return { setup: null, classes: [] };
+function isRecordActive(data: Record<string, unknown>): boolean {
+  if (data.isActive === false || data.active === false || data.is_active === false) {
+    return false;
   }
-
-  const activeSetupDoc =
-    setupDocs.docs.find((d) => {
-      const data = d.data();
-      return data.isActive === true || data.active === true;
-    }) ?? setupDocs.docs[0];
-
-  const setupData = activeSetupDoc.data();
-  const setup: CoachingSetup = {
-    id: activeSetupDoc.id,
-    instituteName:
-      (typeof setupData.instituteName === 'string' && setupData.instituteName.trim()) ||
-      (typeof setupData.coachingName === 'string' && setupData.coachingName.trim()) ||
-      (typeof setupData.name === 'string' && setupData.name.trim()) ||
-      'Coaching Center',
-    academicSession:
-      (typeof setupData.academicSession === 'string' && setupData.academicSession.trim()) ||
-      (typeof setupData.session === 'string' && setupData.session.trim()) ||
-      '2026–27',
-    contactPhone:
-      typeof setupData.contactPhone === 'string' ? setupData.contactPhone.trim() : undefined,
-    isActive: setupData.isActive !== false && setupData.active !== false,
-  };
-
-  const classesPath = `coaching_setup/${setup.id}/classes`;
-  let classSnapshot;
-  try {
-    classSnapshot = await getDocs(collection(db, 'coaching_setup', setup.id, 'classes'));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, classesPath);
+  if (typeof data.status === 'string' && data.status.toLowerCase() === 'inactive') {
+    return false;
   }
+  return true;
+}
 
-  const classes: CoachingClass[] = [];
+async function parseClassDocs(
+  setupId: string,
+  docs: QueryDocumentSnapshot<DocumentData>[]
+): Promise<CoachingClass[]> {
+  const parsed: CoachingClass[] = [];
 
-  for (const classDoc of classSnapshot.docs) {
+  for (const classDoc of docs) {
     const data = classDoc.data();
-    const isActive = data.isActive !== false && data.active !== false;
-    if (!isActive) continue;
+    if (!isRecordActive(data)) continue;
 
-    const name =
-      (typeof data.name === 'string' && data.name.trim()) ||
-      (typeof data.className === 'string' && data.className.trim()) ||
-      (typeof data.title === 'string' && data.title.trim()) ||
-      '';
+    const name = parseClassName(data);
     if (!name) continue;
 
     let sections = extractSectionsFromArray(data.sections);
 
     // Fallback: inspect sections subcollection if array is empty
     if (sections.length === 0) {
-      const sectionsPath = `coaching_setup/${setup.id}/classes/${classDoc.id}/sections`;
+      const sectionsPath = `coaching_setup/${setupId}/classes/${classDoc.id}/sections`;
       try {
         const subSnap = await getDocs(
-          collection(db, 'coaching_setup', setup.id, 'classes', classDoc.id, 'sections')
+          collection(db, 'coaching_setup', setupId, 'classes', classDoc.id, 'sections')
         );
         if (!subSnap.empty) {
           sections = subSnap.docs
-            .filter((s) => s.data().isActive !== false && s.data().active !== false)
+            .filter((s) => isRecordActive(s.data()))
             .map((s) => {
               const sData = s.data();
               return (
@@ -197,13 +182,114 @@ export async function fetchActiveCoachingCatalog(): Promise<{
           ? data.displayOrder
           : undefined;
 
-    classes.push({
+    parsed.push({
       id: classDoc.id,
       name,
       sections,
       isActive: true,
       order: orderVal,
     });
+  }
+
+  return parsed;
+}
+
+export async function fetchActiveCoachingCatalog(): Promise<{
+  setup: CoachingSetup | null;
+  classes: CoachingClass[];
+}> {
+  const setupPath = 'coaching_setup';
+  let setupDocs;
+  try {
+    setupDocs = await getDocs(collection(db, setupPath));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, setupPath);
+  }
+
+  let chosenSetup: CoachingSetup | null = null;
+  let classes: CoachingClass[] = [];
+
+  if (!setupDocs.empty) {
+    // Prioritize active setup docs first
+    const orderedSetups = [...setupDocs.docs].sort((a, b) => {
+      const aActive = a.data().isActive === true || a.data().active === true ? 1 : 0;
+      const bActive = b.data().isActive === true || b.data().active === true ? 1 : 0;
+      return bActive - aActive;
+    });
+
+    for (const setupDoc of orderedSetups) {
+      const setupData = setupDoc.data();
+      const candidateSetup: CoachingSetup = {
+        id: setupDoc.id,
+        instituteName:
+          (typeof setupData.instituteName === 'string' && setupData.instituteName.trim()) ||
+          (typeof setupData.coachingName === 'string' && setupData.coachingName.trim()) ||
+          (typeof setupData.name === 'string' && setupData.name.trim()) ||
+          'Coaching Center',
+        academicSession:
+          (typeof setupData.academicSession === 'string' && setupData.academicSession.trim()) ||
+          (typeof setupData.session === 'string' && setupData.session.trim()) ||
+          '2026–27',
+        contactPhone:
+          typeof setupData.contactPhone === 'string' ? setupData.contactPhone.trim() : undefined,
+        isActive: isRecordActive(setupData),
+      };
+
+      if (!chosenSetup) {
+        chosenSetup = candidateSetup;
+      }
+
+      const classesPath = `coaching_setup/${candidateSetup.id}/classes`;
+      let classSnapshot;
+      try {
+        classSnapshot = await getDocs(
+          collection(db, 'coaching_setup', candidateSetup.id, 'classes')
+        );
+      } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, classesPath);
+      }
+
+      const parsedClasses = await parseClassDocs(candidateSetup.id, classSnapshot.docs);
+      if (parsedClasses.length > 0) {
+        chosenSetup = candidateSetup;
+        classes = parsedClasses;
+        break;
+      }
+    }
+  }
+
+  // Fallback for virtual/italicized parent coaching_setup/{setupId} docs via collectionGroup('classes')
+  if (classes.length === 0) {
+    try {
+      const groupSnap = await getDocs(collectionGroup(db, 'classes'));
+      const groupedBySetup = new Map<string, QueryDocumentSnapshot<DocumentData>[]>();
+      for (const docSnap of groupSnap.docs) {
+        const parentDocRef = docSnap.ref.parent.parent;
+        const parentCollectionId = parentDocRef?.parent?.id;
+        if (parentCollectionId === 'coaching_setup' && parentDocRef?.id) {
+          const arr = groupedBySetup.get(parentDocRef.id) ?? [];
+          arr.push(docSnap);
+          groupedBySetup.set(parentDocRef.id, arr);
+        }
+      }
+
+      for (const [setupId, docs] of groupedBySetup.entries()) {
+        const parsedClasses = await parseClassDocs(setupId, docs);
+        if (parsedClasses.length > 0) {
+          chosenSetup = chosenSetup ?? {
+            id: setupId,
+            instituteName: 'Coaching Center',
+            academicSession: '2026–27',
+            isActive: true,
+          };
+          chosenSetup.id = setupId;
+          classes = parsedClasses;
+          break;
+        }
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'classes');
+    }
   }
 
   classes.sort((a, b) => {
@@ -213,7 +299,7 @@ export async function fetchActiveCoachingCatalog(): Promise<{
     return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
   });
 
-  return { setup, classes };
+  return { setup: chosenSetup, classes };
 }
 
 export interface SubmitAdmissionParams {

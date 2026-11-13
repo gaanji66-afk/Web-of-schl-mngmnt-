@@ -128,6 +128,17 @@ service cloud.firestore {
       }
     }
 
+    // Support collectionGroup('classes') when parent coaching_setup/{setupId} is a virtual document
+    match /{path=**}/classes/{classId} {
+      allow get: if isValidId(classId);
+      allow list: if true;
+    }
+
+    match /{path=**}/sections/{sectionId} {
+      allow get: if isValidId(sectionId);
+      allow list: if true;
+    }
+
     // =========================================================================
     // Blocked Phone Numbers (Single-doc Pre-Check & Post-Auth Verification)
     // =========================================================================
