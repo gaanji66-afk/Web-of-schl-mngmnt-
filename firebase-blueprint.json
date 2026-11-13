@@ -1,0 +1,208 @@
+{
+  "entities": {
+    "CoachingSetup": {
+      "title": "CoachingSetup",
+      "description": "Root configuration document for an active coaching center setup created by the teacher management app.",
+      "type": "object",
+      "properties": {
+        "instituteName": {
+          "type": "string",
+          "description": "Display name of the coaching center.",
+          "maxLength": 120,
+          "minLength": 1
+        },
+        "academicSession": {
+          "type": "string",
+          "description": "Current academic session label.",
+          "maxLength": 40
+        },
+        "contactPhone": {
+          "type": "string",
+          "description": "Office support phone number.",
+          "maxLength": 20
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Whether this setup is active for online admissions."
+        }
+      },
+      "required": ["instituteName"]
+    },
+    "CoachingClass": {
+      "title": "CoachingClass",
+      "description": "An academic class or batch configured under a coaching setup.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Class name such as Class 10th.",
+          "maxLength": 100,
+          "minLength": 1
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Whether the class is open for registration."
+        },
+        "sections": {
+          "type": "array",
+          "description": "Optional list of section names configured for this class."
+        }
+      },
+      "required": ["name"]
+    },
+    "CoachingSection": {
+      "title": "CoachingSection",
+      "description": "Optional subcollection document representing a section under a class.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Section label such as Section A.",
+          "maxLength": 60,
+          "minLength": 1
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Whether the section is active."
+        }
+      },
+      "required": ["name"]
+    },
+    "BlockedNumber": {
+      "title": "BlockedNumber",
+      "description": "Blocked phone number record keyed by normalized E.164 (+91XXXXXXXXXX) or 10-digit phone number.",
+      "type": "object",
+      "properties": {
+        "isBlocked": {
+          "type": "boolean",
+          "description": "Whether this phone number is blocked from online admission."
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Optional reference name of the blocked student.",
+          "maxLength": 100
+        },
+        "blockedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the number was blocked."
+        }
+      },
+      "required": ["isBlocked"]
+    },
+    "StudentAdmission": {
+      "title": "StudentAdmission",
+      "description": "Student self-registration record created after Firebase Phone OTP verification.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Student full name.",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "fatherName": {
+          "type": "string",
+          "description": "Father's full name.",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "mainContactNumber": {
+          "type": "string",
+          "description": "Verified 10-digit mobile number.",
+          "pattern": "^[0-9]{10}$",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "class": {
+          "type": "string",
+          "description": "Selected class display name.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "classId": {
+          "type": "string",
+          "description": "Document ID of the selected class under coaching_setup/{setupId}/classes.",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "section": {
+          "type": "string",
+          "description": "Selected section name or null when class has no sections.",
+          "maxLength": 60
+        },
+        "feeStatus": {
+          "type": "integer",
+          "description": "Mandatory integer 0 for web admission."
+        },
+        "dueDateLevel": {
+          "type": "integer",
+          "description": "Mandatory integer 0 for first-time web admission."
+        },
+        "firstDueDate": {
+          "type": "string",
+          "description": "Always null on web admission."
+        },
+        "currentDueDate": {
+          "type": "string",
+          "description": "Always null on web admission."
+        },
+        "setupId": {
+          "type": "string",
+          "description": "Parent coaching_setup document ID.",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of admission submission."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "name",
+        "fatherName",
+        "mainContactNumber",
+        "class",
+        "classId",
+        "section",
+        "feeStatus",
+        "dueDateLevel",
+        "firstDueDate",
+        "currentDueDate",
+        "setupId",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/coaching_setup/{setupId}": {
+      "schema": { "$ref": "#/entities/CoachingSetup" },
+      "description": "Coaching center setup configurations."
+    },
+    "/coaching_setup/{setupId}/classes/{classId}": {
+      "schema": { "$ref": "#/entities/CoachingClass" },
+      "description": "Classes configured under a coaching setup."
+    },
+    "/coaching_setup/{setupId}/classes/{classId}/sections/{sectionId}": {
+      "schema": { "$ref": "#/entities/CoachingSection" },
+      "description": "Sections subcollection under a class."
+    },
+    "/blocked_numbers/{phoneKey}": {
+      "schema": { "$ref": "#/entities/BlockedNumber" },
+      "description": "Blocked phone numbers indexed by normalized +91 or 10-digit phone number."
+    },
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/StudentAdmission" },
+      "description": "Shared top-level student records read by the Coaching Management Android app."
+    }
+  }
+}

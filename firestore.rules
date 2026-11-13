@@ -1,0 +1,173 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Global Hardened Primitives
+    // =========================================================================
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasVerifiedPhoneToken() {
+      return isSignedIn()
+        && ('phone_number' in request.auth.token)
+        && request.auth.token.phone_number is string;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidPhoneKey(phoneKey) {
+      return phoneKey is string && (
+        phoneKey.matches('^[0-9]{10}$') ||
+        phoneKey.matches('^\\+[0-9]{10,15}$')
+      );
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Verify that a specific blocked_numbers document does NOT block the user
+    function isDocNotBlocked(docId) {
+      return !exists(/databases/$(database)/documents/blocked_numbers/$(docId))
+        || get(/databases/$(database)/documents/blocked_numbers/$(docId)).data.get('isBlocked', true) == false;
+    }
+
+    // Server-side block check across authenticated E.164 token and normalized 10-digit keys
+    function isApplicantPhoneNotBlocked(phone10) {
+      return hasVerifiedPhoneToken()
+        && isDocNotBlocked(request.auth.token.phone_number)
+        && isDocNotBlocked('+91' + phone10)
+        && isDocNotBlocked(phone10);
+    }
+
+    function isValidNewStudent(data) {
+      return data.keys().hasAll([
+          'name',
+          'fatherName',
+          'mainContactNumber',
+          'class',
+          'classId',
+          'section',
+          'feeStatus',
+          'dueDateLevel',
+          'firstDueDate',
+          'currentDueDate',
+          'setupId',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'name',
+          'fatherName',
+          'mainContactNumber',
+          'class',
+          'classId',
+          'section',
+          'feeStatus',
+          'dueDateLevel',
+          'firstDueDate',
+          'currentDueDate',
+          'setupId',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.fatherName is string && data.fatherName.size() >= 2 && data.fatherName.size() <= 100
+        && data.mainContactNumber is string && data.mainContactNumber.matches('^[0-9]{10}$')
+        && data['class'] is string && data['class'].size() >= 1 && data['class'].size() <= 100
+        && isValidId(data.classId)
+        && (data.section == null || (data.section is string && data.section.size() >= 1 && data.section.size() <= 60))
+        && data.feeStatus is int && data.feeStatus == 0
+        && data.dueDateLevel is int && data.dueDateLevel == 0
+        && data.firstDueDate == null
+        && data.currentDueDate == null
+        && isValidId(data.setupId)
+        && data.createdAt == request.time
+        && data.updatedAt == request.time
+        // Enforce that the verified Firebase Phone Auth number owns this 10-digit number
+        && hasVerifiedPhoneToken()
+        && (
+          request.auth.token.phone_number == '+91' + data.mainContactNumber ||
+          request.auth.token.phone_number == data.mainContactNumber ||
+          request.auth.token.phone_number.matches('^\\+[0-9]{1,4}' + data.mainContactNumber + '$')
+        );
+    }
+
+    // =========================================================================
+    // Coaching Setup & Dynamic Classes / Sections (Public Catalog Read)
+    // =========================================================================
+    match /coaching_setup/{setupId} {
+      allow get: if isValidId(setupId);
+      allow list: if true;
+      allow create, update, delete: if isAdmin();
+
+      match /classes/{classId} {
+        allow get: if isValidId(setupId) && isValidId(classId);
+        allow list: if isValidId(setupId);
+        allow create, update, delete: if isAdmin();
+
+        match /sections/{sectionId} {
+          allow get: if isValidId(setupId) && isValidId(classId) && isValidId(sectionId);
+          allow list: if isValidId(setupId) && isValidId(classId);
+          allow create, update, delete: if isAdmin();
+        }
+      }
+    }
+
+    // =========================================================================
+    // Blocked Phone Numbers (Single-doc Pre-Check & Post-Auth Verification)
+    // =========================================================================
+    match /blocked_numbers/{phoneKey} {
+      // Allow single-document lookup by exact phone key for pre-OTP check.
+      // Explicitly forbid list queries to prevent phone number enumeration.
+      allow get: if isValidPhoneKey(phoneKey);
+      allow list: if false;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // Student Admissions (Shared Collection with Android Teacher App)
+    // =========================================================================
+    match /students/{studentId} {
+      allow get, list: if isAdmin();
+
+      allow create: if isSignedIn()
+        && isValidId(studentId)
+        && isValidNewStudent(incoming())
+        && exists(/databases/$(database)/documents/coaching_setup/$(incoming().setupId)/classes/$(incoming().classId))
+        && isApplicantPhoneNotBlocked(incoming().mainContactNumber);
+
+      allow update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // Admin Role Directory
+    // =========================================================================
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && request.auth.uid == adminId;
+      allow list, write: if false;
+    }
+
+    // =========================================================================
+    // Connection Health Check Probe
+    // =========================================================================
+    match /test/connection {
+      allow get: if true;
+      allow list, write: if false;
+    }
+  }
+}

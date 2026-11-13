@@ -1,0 +1,6 @@
+{
+  "name": "Coaching Center Online Admission Portal",
+  "description": "Public student online admission and self-registration portal with dynamic class selection, Firebase Phone OTP verification, blocked-number protection, and printable confirmation slips.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
