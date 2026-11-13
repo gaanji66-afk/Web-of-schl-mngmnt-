@@ -180,7 +180,9 @@ async function parseClassDocs(
         ? data.order
         : typeof data.displayOrder === 'number'
           ? data.displayOrder
-          : undefined;
+          : typeof data.classNumber === 'number'
+            ? data.classNumber
+            : undefined;
 
     parsed.push({
       id: classDoc.id,

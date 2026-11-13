@@ -37,7 +37,15 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (
+          ('email' in request.auth.token) &&
+          ('email_verified' in request.auth.token) &&
+          request.auth.token.email == 'gaanji66@gmail.com' &&
+          request.auth.token.email_verified == true
+        )
+      );
     }
 
     // Verify that a specific blocked_numbers document does NOT block the user
@@ -146,7 +154,7 @@ service cloud.firestore {
       // Allow single-document lookup by exact phone key for pre-OTP check.
       // Explicitly forbid list queries to prevent phone number enumeration.
       allow get: if isValidPhoneKey(phoneKey);
-      allow list: if false;
+      allow list: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
 

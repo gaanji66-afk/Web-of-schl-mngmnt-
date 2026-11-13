@@ -100,10 +100,17 @@ export default function App() {
       const result = await fetchActiveCoachingCatalog();
       setSetup(result.setup);
       setClasses(result.classes);
-    } catch {
-      setCatalogError(
-        'Could not load classes from Firestore right now. Please check your connection and retry.'
-      );
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '';
+      if (msg.includes('permission-denied') || msg.includes('Missing or insufficient permissions')) {
+        setCatalogError(
+          'Firestore permission denied while reading classes. Please allow read access on coaching_setup (and its classes/sections subcollections) in your Firestore Security Rules.'
+        );
+      } else {
+        setCatalogError(
+          'Could not load classes from Firestore right now. Please check your connection and retry.'
+        );
+      }
     } finally {
       setLoadingCatalog(false);
     }
