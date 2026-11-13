@@ -23,13 +23,14 @@ import type {
   CoachingSetup,
   SubmittedAdmission,
 } from './types/admission';
+import campusImage from './assets/images/academic_portal_campus_1794559007225.jpg';
 import { PortalHeader } from './components/PortalHeader';
 import { StepIndicator } from './components/StepIndicator';
 import { StudentDetailsStep } from './components/StudentDetailsStep';
 import { OtpVerificationStep } from './components/OtpVerificationStep';
 import { AdmissionSlipStep } from './components/AdmissionSlipStep';
 
-const CAMPUS_IMAGE_SRC = '/src/assets/images/academic_portal_campus_1794559007225.jpg';
+const CAMPUS_IMAGE_SRC = campusImage;
 
 const INITIAL_FORM_VALUES: AdmissionFormValues = {
   studentName: '',
