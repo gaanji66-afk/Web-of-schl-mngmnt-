@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coaching Center Online Admission Portal</title>
+    <script>
+      (function () {
+        if (sessionStorage.getItem('gh_pages_redirected')) return;
+        sessionStorage.setItem('gh_pages_redirected', '1');
+        var segments = window.location.pathname.split('/').filter(Boolean);
+        var target = segments.length > 1 ? '/' + segments[0] + '/' : '/';
+        window.location.replace(window.location.origin + target);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
