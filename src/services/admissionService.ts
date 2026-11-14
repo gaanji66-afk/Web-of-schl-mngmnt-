@@ -341,11 +341,20 @@ export async function submitStudentAdmission(
   const studentId = studentRef.id;
   const path = `students/${studentId}`;
 
+  const normalizedClassName = params.className.trim().slice(0, 100);
+
   const payload = {
     name: params.studentName.trim().slice(0, 100),
     fatherName: params.fatherName.trim().slice(0, 100),
     mainContactNumber: tenDigits,
-    class: params.className.trim().slice(0, 100),
+    contactNumber: tenDigits,
+    phoneNumber: tenDigits,
+    mobileNumber: tenDigits,
+    phone: tenDigits,
+    mobile: tenDigits,
+    class: normalizedClassName,
+    className: normalizedClassName,
+    studentClass: normalizedClassName,
     classId: params.classId,
     section: params.section && params.section.trim() ? params.section.trim().slice(0, 60) : null,
     feeStatus: 0,

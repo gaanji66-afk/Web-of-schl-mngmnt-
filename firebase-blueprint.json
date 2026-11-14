@@ -114,9 +114,56 @@
           "minLength": 10,
           "maxLength": 10
         },
+        "contactNumber": {
+          "type": "string",
+          "description": "Synchronized 10-digit mobile number alias for Android app compatibility.",
+          "pattern": "^[0-9]{10}$",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "Synchronized 10-digit mobile number alias for Android app compatibility.",
+          "pattern": "^[0-9]{10}$",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "mobileNumber": {
+          "type": "string",
+          "description": "Synchronized 10-digit mobile number alias for Android app compatibility.",
+          "pattern": "^[0-9]{10}$",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "phone": {
+          "type": "string",
+          "description": "Synchronized 10-digit mobile number alias for Android app compatibility.",
+          "pattern": "^[0-9]{10}$",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "mobile": {
+          "type": "string",
+          "description": "Synchronized 10-digit mobile number alias for Android app compatibility.",
+          "pattern": "^[0-9]{10}$",
+          "minLength": 10,
+          "maxLength": 10
+        },
         "class": {
           "type": "string",
           "description": "Selected class display name.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "className": {
+          "type": "string",
+          "description": "Synchronized class display name matching coaching_setup classes schema.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "studentClass": {
+          "type": "string",
+          "description": "Synchronized class display name alias.",
           "minLength": 1,
           "maxLength": 100
         },

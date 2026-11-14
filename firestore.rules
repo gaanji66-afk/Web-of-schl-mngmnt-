@@ -72,6 +72,7 @@ service cloud.firestore {
           'fatherName',
           'mainContactNumber',
           'class',
+          'className',
           'classId',
           'section',
           'feeStatus',
@@ -86,7 +87,14 @@ service cloud.firestore {
           'name',
           'fatherName',
           'mainContactNumber',
+          'contactNumber',
+          'phoneNumber',
+          'mobileNumber',
+          'phone',
+          'mobile',
           'class',
+          'className',
+          'studentClass',
           'classId',
           'section',
           'feeStatus',
@@ -100,7 +108,14 @@ service cloud.firestore {
         && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
         && data.fatherName is string && data.fatherName.size() >= 2 && data.fatherName.size() <= 100
         && data.mainContactNumber is string && data.mainContactNumber.matches('^[0-9]{10}$')
+        && (!('contactNumber' in data) || data.contactNumber == data.mainContactNumber)
+        && (!('phoneNumber' in data) || data.phoneNumber == data.mainContactNumber)
+        && (!('mobileNumber' in data) || data.mobileNumber == data.mainContactNumber)
+        && (!('phone' in data) || data.phone == data.mainContactNumber)
+        && (!('mobile' in data) || data.mobile == data.mainContactNumber)
         && data['class'] is string && data['class'].size() >= 1 && data['class'].size() <= 100
+        && data.className is string && data.className == data['class']
+        && (!('studentClass' in data) || data.studentClass == data['class'])
         && isValidId(data.classId)
         && (data.section == null || (data.section is string && data.section.size() >= 1 && data.section.size() <= 60))
         && data.feeStatus is int && data.feeStatus == 0
