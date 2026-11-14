@@ -239,9 +239,6 @@ export function OtpVerificationStep({
         </span>
       </div>
 
-      {/* Hidden reCAPTCHA container for resend support */}
-      <div id="recaptcha-container" className="flex justify-center" />
-
       <div className="pt-1 flex flex-col gap-3 sm:flex-row">
         {isBlockedError ? (
           <button

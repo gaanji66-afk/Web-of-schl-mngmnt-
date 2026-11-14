@@ -385,9 +385,6 @@ export function StudentDetailsStep({
         </div>
       )}
 
-      {/* Invisible reCAPTCHA mount point */}
-      <div id="recaptcha-container" className="flex justify-center" />
-
       <div className="pt-1">
         <button
           type="submit"

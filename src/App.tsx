@@ -46,6 +46,16 @@ function mapPhoneAuthError(error: unknown): string {
     typeof error === 'object' && error !== null && 'code' in error
       ? String((error as { code: unknown }).code)
       : '';
+  const rawMessage = error instanceof Error ? error.message : String(error ?? '');
+  const lowerMsg = rawMessage.toLowerCase();
+
+  if (lowerMsg.includes('region') || lowerMsg.includes('sms unable to be sent')) {
+    return 'SMS OTP for India (+91) is currently restricted in your Firebase SMS Region Policy. Open Firebase Console → Authentication → Settings → SMS Region Policy and add India (+91) to Allowed regions (or add test phone numbers under Sign-in method → Phone).';
+  }
+
+  if (code === 'auth/billing-not-enabled' || lowerMsg.includes('billing_not_enabled')) {
+    return 'Live SMS OTP requires a Blaze billing account on your Firebase project. For free testing without billing, add test phone numbers under Firebase Console → Authentication → Sign-in method → Phone.';
+  }
 
   switch (code) {
     case 'auth/invalid-phone-number':
@@ -57,16 +67,14 @@ function mapPhoneAuthError(error: unknown): string {
     case 'auth/code-expired':
       return 'This OTP code has expired. Please request a new code via Resend OTP.';
     case 'auth/operation-not-allowed':
-      return 'Phone SMS Authentication is not yet enabled in Firebase Console. Please enable Phone Sign-In under Authentication → Sign-in method.';
+      return 'Firebase Auth rejected this SMS request (operation-not-allowed). Please check Firebase Console → Authentication → Settings → SMS Region Policy (allow India +91) and ensure Phone Sign-In is enabled.';
     case 'auth/unauthorized-domain':
       return `This domain (${window.location.hostname}) is not authorized for Firebase Phone Auth. Add it under Firebase Console → Authentication → Settings → Authorized domains.`;
     case 'auth/captcha-check-failed':
     case 'auth/invalid-app-credential':
       return 'reCAPTCHA verification failed. Please refresh the page and try again.';
     default:
-      return error instanceof Error
-        ? error.message
-        : 'Unable to complete verification. Please try again.';
+      return rawMessage || 'Unable to complete verification. Please try again.';
   }
 }
 
@@ -90,6 +98,7 @@ export default function App() {
 
   const [submittedAdmission, setSubmittedAdmission] = useState<SubmittedAdmission | null>(null);
 
+  const recaptchaHostRef = useRef<HTMLDivElement | null>(null);
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
   const confirmationResultRef = useRef<ConfirmationResult | null>(null);
 
@@ -129,9 +138,8 @@ export default function App() {
       }
       recaptchaVerifierRef.current = null;
     }
-    const container = document.getElementById('recaptcha-container');
-    if (container) {
-      container.innerHTML = '';
+    if (recaptchaHostRef.current) {
+      recaptchaHostRef.current.innerHTML = '';
     }
   }, []);
 
@@ -143,7 +151,13 @@ export default function App() {
 
   const createRecaptchaVerifier = useCallback(() => {
     clearRecaptcha();
-    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+    const host = recaptchaHostRef.current;
+    if (!host) {
+      throw new Error('Verification widget is not ready yet. Please try again.');
+    }
+    const freshMount = document.createElement('div');
+    host.appendChild(freshMount);
+    const verifier = new RecaptchaVerifier(auth, freshMount, {
       size: 'invisible',
     });
     recaptchaVerifierRef.current = verifier;
@@ -485,6 +499,9 @@ export default function App() {
             <p>Academic Session {academicSession}</p>
           </div>
         </footer>
+
+        {/* Dedicated reCAPTCHA mount host outside step transitions */}
+        <div ref={recaptchaHostRef} className="no-print" aria-hidden="true" />
       </div>
     </MotionConfig>
   );
