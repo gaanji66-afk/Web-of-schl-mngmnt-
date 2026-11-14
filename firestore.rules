@@ -3,11 +3,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Global Safety Net: Default-deny catch-all
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // =========================================================================
     // Global Hardened Primitives
     // =========================================================================
@@ -25,6 +20,13 @@ service cloud.firestore {
         && request.auth.token.phone_number is string;
     }
 
+    function isPhoneOtpUser() {
+      return isSignedIn()
+        && ('firebase' in request.auth.token)
+        && ('sign_in_provider' in request.auth.token.firebase)
+        && request.auth.token.firebase.sign_in_provider == 'phone';
+    }
+
     function isValidId(id) {
       return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -36,6 +38,7 @@ service cloud.firestore {
       );
     }
 
+    // Teacher / Admin Android App access (non-phone auth providers or explicit admins doc)
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
@@ -44,7 +47,8 @@ service cloud.firestore {
           ('email_verified' in request.auth.token) &&
           request.auth.token.email == 'gaanji66@gmail.com' &&
           request.auth.token.email_verified == true
-        )
+        ) ||
+        !isPhoneOtpUser()
       );
     }
 
@@ -106,13 +110,20 @@ service cloud.firestore {
         && isValidId(data.setupId)
         && data.createdAt == request.time
         && data.updatedAt == request.time
-        // Enforce that the verified Firebase Phone Auth number owns this 10-digit number
         && hasVerifiedPhoneToken()
         && (
           request.auth.token.phone_number == '+91' + data.mainContactNumber ||
           request.auth.token.phone_number == data.mainContactNumber ||
           request.auth.token.phone_number.matches('^\\+[0-9]{1,4}' + data.mainContactNumber + '$')
         );
+    }
+
+    // =========================================================================
+    // Android Coaching App Collections Compatibility
+    // Restricts unauthenticated and Phone-OTP web applicants; allows Android App
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if isAdmin();
     }
 
     // =========================================================================
@@ -136,7 +147,7 @@ service cloud.firestore {
       }
     }
 
-    // Support collectionGroup('classes') when parent coaching_setup/{setupId} is a virtual document
+    // Support collectionGroup('classes') and collectionGroup('sections')
     match /{path=**}/classes/{classId} {
       allow get: if isValidId(classId);
       allow list: if true;
@@ -151,11 +162,8 @@ service cloud.firestore {
     // Blocked Phone Numbers (Single-doc Pre-Check & Post-Auth Verification)
     // =========================================================================
     match /blocked_numbers/{phoneKey} {
-      // Allow single-document lookup by exact phone key for pre-OTP check.
-      // Explicitly forbid list queries to prevent phone number enumeration.
       allow get: if isValidPhoneKey(phoneKey);
-      allow list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow list, create, update, delete: if isAdmin();
     }
 
     // =========================================================================
@@ -164,11 +172,13 @@ service cloud.firestore {
     match /students/{studentId} {
       allow get, list: if isAdmin();
 
-      allow create: if isSignedIn()
+      allow create: if isAdmin() || (
+        isSignedIn()
         && isValidId(studentId)
         && isValidNewStudent(incoming())
         && exists(/databases/$(database)/documents/coaching_setup/$(incoming().setupId)/classes/$(incoming().classId))
-        && isApplicantPhoneNotBlocked(incoming().mainContactNumber);
+        && isApplicantPhoneNotBlocked(incoming().mainContactNumber)
+      );
 
       allow update, delete: if isAdmin();
     }
@@ -178,7 +188,7 @@ service cloud.firestore {
     // =========================================================================
     match /admins/{adminId} {
       allow get: if isSignedIn() && request.auth.uid == adminId;
-      allow list, write: if false;
+      allow list, write: if isAdmin();
     }
 
     // =========================================================================
